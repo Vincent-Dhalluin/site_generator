@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Générateur de site web avec Codestral</title>
+    <style>
+        /* Spinner d'attente */
+        .spinner {
+            display: block;
+            width: 32px;
+            height: 32px;
+            border: 4px solid #90caf9;
+            border-top: 4px solid #1976d2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 16px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+        }
+
+        #conversation {
+            width: 30%;
+            min-width: 250px;
+            max-width: 500px;
+            resize: horizontal;
+            overflow: auto;
+            border-right: 2px solid #2196f3;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            box-sizing: border-box;
+            background: linear-gradient(135deg, #e3f2fd 0%, #90caf9 100%);
+        }
+
+        #conversation h1 {
+            text-align: center;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #1565c0;
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            border: 1px solid #90caf9;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #e3f2fd;
+        }
+
+        #user-input {
+            width: 100%;
+            height: 100px;
+            margin-top: 10px;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #90caf9;
+            border-radius: 5px;
+            resize: none;
+            background-color: #e3f2fd;
+        }
+
+        #actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        #send-button, #regenerate-button {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        #send-button {
+            background-color: #1976d2;
+            color: white;
+            box-shadow: 0 2px 6px #90caf9;
+        }
+
+        #regenerate-button {
+            background-color: #64b5f6;
+            color: white;
+            box-shadow: 0 2px 6px #90caf9;
+        }
+
+        #preview {
+            width: 70%;
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        }
+
+        #preview iframe {
+            width: 100%;
+            height: 90%;
+            border: none;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        #history {
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        #history h3 {
+            margin-top: 0;
+            font-size: 1em;
+        }
+
+        .history-item {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            color: #007BFF;
+        }
+
+        .history-item:hover {
+            background-color: #e9ecef;
+        }
+
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+
+        .error {
+            color: red;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 5px;
+            background-color: #bbdefb;
+            border-left: 3px solid #1976d2;
+            color: #0d47a1;
+        }
+
+        .user-message {
+            border-left-color: #64b5f6;
+        }
+        @keyframes gradientBG {
+            0% {background-position:0% 50%}
+            50% {background-position:100% 50%}
+            100% {background-position:0% 50%}
+        }
+        </style>
+</head>
+<body>
+    <div id="conversation">
+        <h1>Conversation avec Codestral</h1>
+        <div id="messages"></div>
+    <textarea id="user-input" placeholder="Décrivez votre site ici..." style="width:100%;margin-top:10px;padding:10px;box-sizing:border-box;border:1px solid #90caf9;border-radius:5px;background-color:#e3f2fd;resize:none;height:100px;"></textarea>
+        <div id="actions">
+            <button id="send-button">Envoyer</button>
+            <button id="regenerate-button" disabled>Régénérer</button>
+        </div>
+    </div>
+    <div id="preview">
+        <div id="preview-container" style="position:relative;">
+            <iframe id="site-preview" srcdoc="<html><body><h1>Prévisualisation du site</h1></body></html>" style="width:100%;height:700px;transition:all 0.3s;"></iframe>
+            <button id="fullscreen-button" title="Plein écran" style="position:absolute;bottom:10px;right:10px;padding:8px 12px;border-radius:50%;border:none;background:#1976d2;color:white;font-size:20px;box-shadow:0 2px 6px #90caf9;cursor:pointer;">⛶</button>
+        </div>
+        <button id="copy-button" style="margin-top:10px;padding:8px 16px;border-radius:5px;border:none;background:#1976d2;color:white;font-weight:bold;cursor:pointer;">Copier le code généré</button>
+        <div id="history">
+            <h3>Historique des versions :</h3>
+            <div id="history-list"></div>
+        </div>
+    </div>
+
+    <script>
+document.addEventListener('DOMContentLoaded', function() {
+        // Fonctionnalité du bouton 'Copier le code généré'
+        var copyBtn = document.getElementById('copy-button');
+        if (copyBtn) {
+                copyBtn.addEventListener('click', function() {
+                        // Récupère le dernier HTML généré
+                        var lastHtml = history && history.length > 0 ? history[0].html : '';
+                        if (lastHtml) {
+                                navigator.clipboard.writeText(lastHtml)
+                                    .then(function() {
+                                        copyBtn.textContent = 'Copié !';
+                                        setTimeout(function() { copyBtn.textContent = 'Copier le code généré'; }, 1500);
+                                    })
+                                    .catch(function() {
+                                        copyBtn.textContent = 'Erreur...';
+                                        setTimeout(function() { copyBtn.textContent = 'Copier le code généré'; }, 1500);
+                                    });
+                        }
+                });
+        }
+    // Bouton plein écran JS custom
+    var fullscreenBtn = document.getElementById('fullscreen-button');
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', function() {
+            const previewContainer = document.getElementById('preview-container');
+            const iframe = document.getElementById('site-preview');
+            // Crée un overlay pour le plein écran
+            const overlay = document.createElement('div');
+            overlay.id = 'preview-fullscreen-overlay';
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100vw';
+            overlay.style.height = '100vh';
+            overlay.style.background = 'linear-gradient(270deg, #ff6e7f, #bfe9ff, #76b2fe, #f9f9f9)';
+            overlay.style.backgroundSize = '800% 800%';
+            overlay.style.animation = 'gradientBG 20s ease infinite';
+            overlay.style.zIndex = '9999';
+            overlay.style.display = 'flex';
+            overlay.style.justifyContent = 'center';
+            overlay.style.alignItems = 'center';
+
+            // Clone l'iframe pour l'afficher en grand
+            const fullscreenIframe = document.createElement('iframe');
+            fullscreenIframe.srcdoc = iframe.srcdoc;
+            fullscreenIframe.style.width = '90vw';
+            fullscreenIframe.style.height = '90vh';
+            fullscreenIframe.style.border = '2px solid #1976d2';
+            fullscreenIframe.style.borderRadius = '10px';
+            fullscreenIframe.style.background = 'white';
+
+            // Bouton pour quitter le plein écran
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '✕';
+            closeBtn.title = 'Quitter le plein écran';
+            closeBtn.style.position = 'absolute';
+            closeBtn.style.top = '30px';
+            closeBtn.style.right = '40px';
+            closeBtn.style.padding = '10px 16px';
+            closeBtn.style.borderRadius = '50%';
+            closeBtn.style.border = 'none';
+            closeBtn.style.background = '#1976d2';
+            closeBtn.style.color = 'white';
+            closeBtn.style.fontSize = '24px';
+            closeBtn.style.cursor = 'pointer';
+            closeBtn.style.zIndex = '10001';
+            closeBtn.style.boxShadow = '0 2px 6px #90caf9';
+            closeBtn.addEventListener('click', function() {
+                document.body.removeChild(overlay);
+            });
+
+            overlay.appendChild(fullscreenIframe);
+            overlay.appendChild(closeBtn);
+            document.body.appendChild(overlay);
+        });
+    }
+});
+    const API_URL = "https://api.mistral.ai/v1/chat/completions";
+    const API_KEY = "R2yNsdNVMGIhi07LrCk2gcTh3F3kRF4Y"; // Remplacez par votre clé
+    let history = [];
+    let messages = [];
+
+async function generateSite(userInput) {
+    if (userInput.trim() === '') return;
+
+    currentDescription = userInput;
+    const messagesDiv = document.getElementById('messages');
+    messagesDiv.innerHTML += `<div class="message user-message"><strong>Vous :</strong> ${userInput}</div>`;
+    messagesDiv.innerHTML += `<div class="message loading"><div class='spinner'></div>Codestral est en train de générer votre site...</div>`;
+
+    // Ajout du message utilisateur à l'historique de conversation
+    messages.push({ role: "user", content: `Génère un site web avec cette description : ${userInput}. Retourne uniquement le code HTML/CSS complet, sans explication.` });
+
+    document.getElementById('regenerate-button').disabled = false;
+    document.getElementById('send-button').disabled = true;
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`
+            },
+            body: JSON.stringify({
+            model: "mistral-small-latest",
+            temperature: 1.5,
+            top_p: 1,
+            max_tokens: 4096, // Augmenté pour plus de caractères
+            stream: false,
+            stop: "</html>",
+            random_seed: 0,
+            messages: messages,
+            response_format: {
+                type: "text"
+            },
+            presence_penalty: 0,
+            frequency_penalty: 0,
+            n: 1
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Erreur API : ${response.status} ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        let generatedHTML = result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content ? result.choices[0].message.content : '';
+        // Nettoyage des balises Markdown
+        generatedHTML = generatedHTML.replace(/^```html\s*/i, '').replace(/```\s*$/i, '');
+        const iframe = document.getElementById('site-preview');
+        iframe.srcdoc = generatedHTML;
+
+        history.unshift({ description: userInput, html: generatedHTML });
+        updateHistory();
+
+        // Ajout du message assistant à l'historique de conversation
+        messages.push({ role: "assistant", content: generatedHTML });
+
+        messagesDiv.innerHTML += `<div class="message"><strong>Codestral :</strong> Site généré avec succès !</div>`;
+    // Retire le spinner d'attente
+    const loadingSpinners = messagesDiv.querySelectorAll('.spinner');
+    loadingSpinners.forEach(spinner => spinner.parentElement.remove());
+    } catch (error) {
+        console.error('Erreur :', error);
+        messagesDiv.innerHTML += `<div class="message error"><strong>Erreur :</strong> ${error.message}</div>`;
+    } finally {
+        document.getElementById('send-button').disabled = false;
+    }
+}
+
+        async function regenerateSite() {
+            if (currentDescription.trim() === '') return;
+
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML += `<div class="message loading">Codestral régénère votre site...</div>`;
+
+            document.getElementById('regenerate-button').disabled = true;
+            document.getElementById('send-button').disabled = true;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        prompt: `Génère un site web avec cette description : ${currentDescription}. Retourne uniquement le code HTML/CSS complet, sans explication.`,
+                        suffix: '</html>'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erreur API : ${response.status} ${response.statusText}`);
+                }
+
+                const generatedHTML = await response.text();
+                const iframe = document.getElementById('site-preview');
+                iframe.srcdoc = generatedHTML;
+
+                // Ajouter à l'historique
+                history.unshift({ description: currentDescription, html: generatedHTML });
+                updateHistory();
+
+                messagesDiv.innerHTML += `<div class="message"><strong>Codestral :</strong> Site régénéré avec succès !</div>`;
+            } catch (error) {
+                console.error('Erreur :', error);
+                messagesDiv.innerHTML += `<div class="message error"><strong>Erreur :</strong> ${error.message}</div>`;
+            } finally {
+                document.getElementById('regenerate-button').disabled = false;
+                document.getElementById('send-button').disabled = false;
+            }
+        }
+
+        function updateHistory() {
+            const historyList = document.getElementById('history-list');
+            historyList.innerHTML = '';
+            history.slice(0, 5).forEach((item, index) => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+                historyItem.textContent = `Version ${index + 1} : ${item.description.substring(0, 30)}...`;
+                historyItem.addEventListener('click', () => {
+                    document.getElementById('site-preview').srcdoc = item.html;
+                });
+                historyList.appendChild(historyItem);
+            });
+        }
+        document.getElementById('send-button').addEventListener('click', () => {
+            const userInputElem = document.getElementById('user-input');
+            const userInput = userInputElem.value;
+            generateSite(userInput);
+            userInputElem.value = '';
+        // Validation avec la touche Enter (sans saut de ligne)
+        document.getElementById('user-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById('send-button').click();
+            }
+        });
+        });
+    </script>
+</body>
+</html>
